@@ -2,12 +2,14 @@ import React, { Component } from 'react'
 import './App.css'
 
 const DEFAULT_QUERY = 'redux'
+const DEFAULT_HPP = '100'
 
 const PATH_BASE = 'https://hn.algolia.com/api/v1'
 const PATH_SEARCH = '/search'
-const PARAM_SEARCH = '/query='
+const PARAM_SEARCH = '?query='
+const PARAM_PAGE = 'page='
+const PARAM_HPP = 'hitsPerPage='
 
-const url = `${PATH_BASE}${PATH_SEARCH}${PARAM_SEARCH}`
 
 const list = [
     {
@@ -40,28 +42,39 @@ const smallColumn = {
     width: '10%',
 }
 
-const isSearched = (searchTerm) => (item) =>
-    item.title.toLowerCase().includes(searchTerm.toLowerCase())
+// const isSearched = (searchTerm) => (item) =>
+//     item.title.toLowerCase().includes(searchTerm.toLowerCase())
 
 class App extends React.Component {
     constructor(props) {
         super(props)
         this.state = {
             list,
-            searchTerm: '',
-            result: '',
+            searchKey: '',
+            searchTerm: DEFAULT_QUERY,
+            results: {},
+            error: null
         }
         this.onDismiss = this.onDismiss.bind(this)
         this.onSearchChange = this.onSearchChange.bind(this)
+        this.onSearchSubmit = this.onSearchSubmit.bind(this)
         this.setSearchTopStories = this.setSearchTopStories.bind(this)
         this.fetchSearchStories = this.fetchSearchStories.bind(this)
     }
     onDismiss(id) {
-        const updatedList = this.state.list.filter(
+        const { searchKey, results } = this.state
+        const { hits, page } = results[searchKey]
+        const updateHits = hits.filter(
             (item) => item.objectID !== id
         )
         this.setState({
-            list: updatedList,
+            results: {
+                ...results,
+                [searchKey]: {
+                    hits: updateHits,
+                    page,
+                },
+            }
         })
     }
     onSearchChange(event) {
@@ -70,27 +83,55 @@ class App extends React.Component {
         })
     }
     setSearchTopStories(result) {
+        const { hits, page } = result
+        const { searchKey, results } = this.state
+        const oldHits = page !== 0 ? results && results[searchKey].hits : []
+        const updateHits = [...oldHits, ...hits]
         this.setState({
-            result,
+            results: {
+                ...results,
+                [searchKey]: {
+                    hits: updateHits,
+                    page
+                }
+            }
         })
     }
-    async fetchSearchStories(searchTerm) {
+    onSearchSubmit(event) {
+        const { searchTerm } = this.state
+        this.setState({
+            searchKey: searchTerm
+        })
+        this.needToFetchSearchStories(searchTerm) && this.fetchSearchStories(searchTerm)
+        event.preventDefault()
+    }
+    needToFetchSearchStories(searchTerm) {
+        return !this.state.results[searchTerm]
+    }
+    async fetchSearchStories(searchTerm, page = 0) {
+        const url = `${PATH_BASE}${PATH_SEARCH}${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}&${PARAM_HPP}${DEFAULT_HPP}`
         try {
-            const response = await fetch(`${url}${searchTerm || DEFAULT_QUERY }`)
-            this.setSearchTopStories(response.json())
+            const result = await (await fetch(`${url}`)).json()
+            this.setSearchTopStories(result)
         } catch (error) {
+            this.setState({
+                error,
+            })
             console.error(error)
         }
     }
     componentDidMount() {
         const { searchTerm } = this.state
+        this.setState({
+            searchKey: searchTerm
+        })
         this.fetchSearchStories(searchTerm)
     }
     render() {
-        const { searchTerm, result } = this.state
-        if (!result) {
-            return null
-        }
+        const { searchTerm, results, searchKey, error } = this.state
+
+        const page = (results && results[searchKey] && results[searchKey].page) || 0
+        const list = (results && results[searchKey] && results[searchKey].hits) || []
         return (
             <div className="App">
                 <div className="page">
@@ -98,16 +139,23 @@ class App extends React.Component {
                         <Search
                             value={searchTerm}
                             onChange={this.onSearchChange}
+                            onSubmit={this.onSearchSubmit}
                         >
                             Search
                         </Search>
                     </div>
-
-                    <Table
-                        list={result.hits}
-                        pattern={searchTerm}
-                        onDismiss={this.onDismiss}
-                    ></Table>
+                    {error ?
+                        <div className="interactions">
+                            <p>Something went wrong.</p>
+                        </div>
+                        : <Table
+                            list={list}
+                            onDismiss={this.onDismiss}
+                        ></Table>
+                    }
+                    <div className="interactions">
+                        <Button onClick={() => this.fetchSearchStories(searchKey, page + 1)}>More</Button>
+                    </div>
                 </div>
             </div>
         )
@@ -120,16 +168,16 @@ const Button = ({ className = '', onClick, children }) => (
     </button>
 )
 
-const Search = ({ value, onChange, children }) => (
-    <form>
-        {children}
+const Search = ({ value, onChange, onSubmit, children }) => (
+    <form onSubmit={onSubmit}>
         <input type="text" value={value} onChange={onChange}></input>
+        <button type="submit" >{children}</button>
     </form>
 )
 
-const Table = ({ list, pattern, onDismiss }) => (
+const Table = ({ list, onDismiss }) => (
     <div className="table">
-        {list.filter(isSearched(pattern)).map((item) => (
+        {list.map((item) => (
             <div key={item.objectID} className="table-row">
                 <span style={largeColumn}>
                     <a href={item.url}>{item.title}</a>
