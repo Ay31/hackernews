@@ -1,7 +1,6 @@
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import { sortBy } from 'lodash'
-import classNames from 'classnames'
 import './App.css'
 
 const DEFAULT_QUERY = 'redux'
@@ -167,8 +166,8 @@ class App extends React.Component {
                             <p>Something went wrong.</p>
                         </div>
                     ) : (
-                        <Table list={list} onDismiss={this.onDismiss}></Table>
-                    )}
+                            <Table list={list} onDismiss={this.onDismiss}></Table>
+                        )}
 
                     <ButtonWithLoading
                         isLoading={isLoading}
@@ -335,11 +334,11 @@ Table.propTypes = {
 // Sort
 
 const Sort = ({ onSort, sortKey, children, activeSortKey }) => {
-    const sortClass = classNames('button-inline', {
-        'button-active': sortKey === activeSortKey,
-    })
+    const sortClass = ['button-inline']; if (sortKey === activeSortKey) {
+        sortClass.push('button-active');
+    }
     return (
-        <Button className={sortClass} onClick={() => onSort(sortKey)}>
+        <Button className={sortClass.join(' ')} onClick={() => onSort(sortKey)}>
             {children}
         </Button>
     )
